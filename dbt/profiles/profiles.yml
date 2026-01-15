@@ -1,0 +1,12 @@
+dbt_proj:
+  outputs:
+    dev:
+      dbname: my_db
+      host: localhost
+      pass: admin123
+      port: 5432
+      schema: public
+      threads: 1
+      type: postgres
+      user: admin
+  target: dev

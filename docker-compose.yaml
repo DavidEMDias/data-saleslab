@@ -1,0 +1,54 @@
+services:
+  postgres:
+    image: postgres:15
+    container_name: postgres_proj
+    env_file:
+      - .env
+    restart: always
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME}
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+
+  minio:
+    image: minio/minio:latest
+    container_name: minio_proj
+    restart: always
+    env_file:
+      - .env
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY}
+      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY}
+    command: server /data --console-address ":9001"
+    ports:
+      - "9000:9000"   # API S3
+      - "9001:9001"   # Console web
+    volumes:
+      - ./data/minio:/data
+
+  dbt:
+      image: ghcr.io/dbt-labs/dbt-postgres:1.8.latest
+      container_name: dbt_to_post
+      working_dir: /usr/app
+      environment:
+        DBT_PROFILES_DIR: /root/.dbt
+        TZ: ${TZ:-UTC}
+        POSTGRES_USER: ${DB_USER} # use as ENV variables in profiles.yml
+        POSTGRES_PASSWORD: ${DB_PASSWORD}
+        POSTGRES_DB: ${DB_NAME}
+      volumes:
+        - ./dbt:/usr/app # needs to be mapped to my project for dbt_project to be found
+        - ./dbt/profiles:/root/.dbt
+      depends_on:
+        postgres:
+          condition: service_healthy
+      #entrypoint: ["/bin/bash", "-lc", "dbt deps && dbt run && tail -f /dev/null"]
