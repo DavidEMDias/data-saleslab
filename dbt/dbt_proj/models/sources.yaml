@@ -1,0 +1,106 @@
+version: 2
+
+sources:
+  - name: bronze
+    description: "Tabelas brutas do banco de dados (fonte original)"
+    tables:
+      - name: produtos_bronze
+        description: "Tabela de produtos cadastrados"
+        columns:
+          - name: id_produto
+            description: "ID único do produto"
+            tests:
+              - unique
+              - not_null
+          - name: nome_produto
+            description: "Nome do produto"
+            tests:
+              - not_null
+          - name: categoria
+            description: "Categoria do produto"
+          - name: marca
+            description: "Marca do produto"
+          - name: preco_atual
+            description: "Preço atual do produto"
+            tests:
+              - not_null
+          - name: data_criacao
+            description: "Data de criação do produto"
+            tests:
+              - not_null
+
+      - name: clientes_bronze
+        description: "Tabela de clientes cadastrados"
+        columns:
+          - name: id_cliente
+            description: "ID único do cliente"
+            tests:
+              - unique
+              - not_null
+          - name: nome_cliente
+            description: "Nome do cliente"
+            tests:
+              - not_null
+          - name: estado
+            description: "Estado do cliente"
+          - name: pais
+            description: "País do cliente"
+            tests:
+              - not_null
+          - name: data_cadastro
+            description: "Data de cadastro do cliente"
+            tests:
+              - not_null
+
+      - name: vendas_bronze
+        description: "Tabela de vendas realizadas"
+        columns:
+          - name: id_venda
+            description: "ID único da venda"
+            tests:
+              - unique
+              - not_null
+          - name: data_venda
+            description: "Data e hora da venda"
+            tests:
+              - not_null
+          - name: id_cliente
+            description: "ID do cliente"
+            tests:
+              - not_null
+          - name: id_produto
+            description: "ID do produto"
+            tests:
+              - not_null
+          - name: canal_venda
+            description: "Canal de venda (ecommerce, loja_fisica)"
+            tests:
+              - not_null
+          - name: quantidade
+            description: "Quantidade vendida"
+            tests:
+              - not_null
+          - name: preco_unitario
+            description: "Preço unitário da venda"
+            tests:
+              - not_null
+
+      - name: preco_competidores_bronze
+        description: "Tabela de preços coletados de concorrentes"
+        columns:
+          - name: id_produto
+            description: "ID do produto"
+            tests:
+              - not_null
+          - name: nome_concorrente
+            description: "Nome do concorrente"
+            tests:
+              - not_null
+          - name: preco_concorrente
+            description: "Preço do concorrente"
+            tests:
+              - not_null
+          - name: data_coleta
+            description: "Data de coleta do preço"
+            tests:
+              - not_null

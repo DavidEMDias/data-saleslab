@@ -3,3 +3,6 @@ sample_data/*
 dbt/logs
 data
 venv
+airflow/logs
+.vscode
+logs/

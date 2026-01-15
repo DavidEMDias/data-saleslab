@@ -1,9 +1,9 @@
-dbt_proj:
+dbt_proj_profile:
   outputs:
     dev:
       dbname: my_db
-      host: localhost
-      pass: admin123
+      host: postgres
+      password: admin123
       port: 5432
       schema: public
       threads: 1

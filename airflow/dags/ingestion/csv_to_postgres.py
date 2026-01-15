@@ -8,7 +8,7 @@ import os
 # Carrega variáveis de ambiente
 load_dotenv()
 
-DB_HOST = os.getenv("DB_HOST", "localhost")
+DB_HOST = "postgres"
 DB_PORT = os.getenv("DB_PORT", "5432")
 DB_NAME = os.getenv("DB_NAME", "my_db")
 DB_USER = os.getenv("DB_USER", "admin")
@@ -65,10 +65,14 @@ def verify_schema_and_table(schema, bronze_table, df, pk, conn):
         );
         """
         conn.execute(text(create_sql))
-        print(f"✔ Tabela {schema}.{bronze_table} criada com sucesso.")
+        print(f"Tabela {schema}.{bronze_table} criada com sucesso.")
 
-# Loop principal por cada tabela
-for table, cfg in tables.items():
+def load_entity_to_bronze(entity: str):
+    if entity not in tables:
+        raise ValueError(f"Entidade inválida: {entity}. Use uma de {list(tables.keys())}")
+
+    cfg = tables[entity]
+
     try:
         # Leitura do CSV
         df = pd.read_csv(cfg["file"], sep=",", encoding="utf-8")
@@ -76,45 +80,104 @@ for table, cfg in tables.items():
         # Colunas de dados (exceto PK)
         data_cols = [c for c in df.columns if c != cfg["pk"]]
 
-        # Calcula hash da linha para controle de alterações
+        # Calcula hash da linha
         df["row_hash"] = df.apply(lambda r: compute_row_hash(r, data_cols), axis=1)
-        
-        # Timestamp da execução da pipeline
+
+        # Timestamp
         df["updated_at"] = pd.Timestamp.utcnow()
 
         schema = "bronze"
-        bronze_table = f"{table}_bronze"
+        bronze_table = f"{entity}_bronze"
 
-        # Criar tabela Bronze se não existir
+        # Criar schema e tabela se necessário
         with engine.begin() as conn:
             verify_schema_and_table(schema, bronze_table, df, cfg["pk"], conn)
-           
 
-        # Inserção incremental com update apenas se o hash mudou
+        # Inserção incremental
         cols = list(df.columns)
         cols_str = ", ".join(cols)
         placeholders = ", ".join([f":{c}" for c in cols])
-        update_cols = ", ".join([f"{c} = EXCLUDED.{c}" for c in cols if c != cfg['pk']])
+        update_cols = ", ".join([f"{c} = EXCLUDED.{c}" for c in cols if c != cfg["pk"]])
 
         insert_sql = f"""
         INSERT INTO {schema}.{bronze_table} ({cols_str})
         VALUES ({placeholders})
-        ON CONFLICT ({cfg['pk']})
+        ON CONFLICT ({cfg["pk"]})
         DO UPDATE SET
             {update_cols}
-        WHERE {schema}.{bronze_table}.row_hash IS DISTINCT FROM EXCLUDED.row_hash;
+        WHERE {schema}.{bronze_table}.row_hash
+              IS DISTINCT FROM EXCLUDED.row_hash;
         """
 
         with engine.begin() as conn:
             result = conn.execute(text(insert_sql), df.to_dict(orient="records"))
 
-        print(f"Inserção incremental feita em {schema}.{bronze_table}, {result.rowcount} linhas processadas.")
+        print(
+            f"Load concluído para {entity} "
+            f"({schema}.{bronze_table}) — {result.rowcount} linhas processadas."
+        )
 
     except FileNotFoundError as e:
         print(f"Arquivo CSV não encontrado: {cfg['file']}. Detalhes: {e}")
+        raise
     except SQLAlchemyError as e:
-        # Captura erros de SQL ou conexão
-        print(f"Erro ao processar tabela {table}: {e}")
+        print(f"Erro SQL ao processar {entity}: {e}")
+        raise
     except Exception as e:
-        # Captura outros erros inesperados
-        print(f"Erro inesperado: {e}")
+        print(f"Erro inesperado ao processar {entity}: {e}")
+        raise
+
+
+# # Loop principal por cada tabela
+# for table, cfg in tables.items():
+#     try:
+#         # Leitura do CSV
+#         df = pd.read_csv(cfg["file"], sep=",", encoding="utf-8")
+
+#         # Colunas de dados (exceto PK)
+#         data_cols = [c for c in df.columns if c != cfg["pk"]]
+
+#         # Calcula hash da linha para controle de alterações
+#         df["row_hash"] = df.apply(lambda r: compute_row_hash(r, data_cols), axis=1)
+        
+#         # Timestamp da execução da pipeline
+#         df["updated_at"] = pd.Timestamp.utcnow()
+
+#         schema = "bronze"
+#         bronze_table = f"{table}_bronze"
+
+#         # Criar tabela Bronze se não existir
+#         with engine.begin() as conn:
+#             verify_schema_and_table(schema, bronze_table, df, cfg["pk"], conn)
+           
+
+#         # Inserção incremental com update apenas se o hash mudou
+#         cols = list(df.columns)
+#         cols_str = ", ".join(cols)
+#         placeholders = ", ".join([f":{c}" for c in cols])
+#         update_cols = ", ".join([f"{c} = EXCLUDED.{c}" for c in cols if c != cfg['pk']])
+
+#         insert_sql = f"""
+#         INSERT INTO {schema}.{bronze_table} ({cols_str})
+#         VALUES ({placeholders})
+#         ON CONFLICT ({cfg['pk']})
+#         DO UPDATE SET
+#             {update_cols}
+#         WHERE {schema}.{bronze_table}.row_hash IS DISTINCT FROM EXCLUDED.row_hash;
+#         """
+
+#         with engine.begin() as conn:
+#             result = conn.execute(text(insert_sql), df.to_dict(orient="records"))
+
+#         print(f"Inserção incremental feita em {schema}.{bronze_table}, {result.rowcount} linhas processadas.")
+
+#     except FileNotFoundError as e:
+#         print(f"Arquivo CSV não encontrado: {cfg['file']}. Detalhes: {e}")
+#     except SQLAlchemyError as e:
+#         # Captura erros de SQL ou conexão
+#         print(f"Erro ao processar tabela {table}: {e}")
+#     except Exception as e:
+#         # Captura outros erros inesperados
+#         print(f"Erro inesperado: {e}")
+
+#load_entity_to_bronze("clientes")
