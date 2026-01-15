@@ -1,7 +1,7 @@
 import os
 import boto3
 from dotenv import load_dotenv
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 import pandas as pd
 import io
 
@@ -49,53 +49,47 @@ parquet = io.BytesIO(parquet_bytes) # <_io.BytesIO object at 0x000001A3FCABCB80>
 
 df_preco_competidores = pd.read_parquet(parquet)
 df_preco_competidores["updated_at"] = pd.Timestamp.utcnow()
+bronze_table = "preco_competidores_bronze"
+schema_name = "bronze"
 
-# Salva no schema "bronze"
-df_preco_competidores.to_sql(
-    name="preco_competidores_bronze",
-    con=engine,
-    schema="bronze",
-    if_exists="replace",
-    index=False
-)
+with engine.begin() as conn:
+    # Cria schema se não existir
+    conn.execute(text(f"CREATE SCHEMA IF NOT EXISTS {schema_name}"))
 
-print("Tabela 'bronze.preco_competidores' criada/atualizada com sucesso!")
+    # Cria tabela se não existir
+    create_sql = f"""
+    CREATE TABLE IF NOT EXISTS {schema_name}.{bronze_table} (
+        id_produto TEXT,
+        nome_concorrente TEXT,
+        preco_concorrente NUMERIC,
+        data_coleta TIMESTAMP,
+        updated_at TIMESTAMP
+    );
+    """
+    conn.execute(text(create_sql))
 
+    # Pega a maior data_coleta já inserida
+    result = conn.execute(
+        text(f"SELECT MAX(data_coleta) FROM {schema_name}.{bronze_table}")
+    )
+    max_data_coleta = result.scalar()
 
+df_preco_competidores["data_coleta"] = pd.to_datetime(df_preco_competidores["data_coleta"])
 
-
-
-
-
-
-
-# s3.create_bucket(Bucket="meu-bucket") create bucket
-# s3.upload_file("arquivo.txt", "meu-bucket", "arquivo.txt") #create arquivo
-# s3.download_file("meu-bucket", "arquivo.txt", "arquivo_baixado.txt") #download arquivo
-
-# list arquivos
-# response = s3.list_objects_v2(Bucket="meu-bucket")
-# print(response.get("Contents", []))
-
-
-#obj = s3.get_object(Bucket="meu-bucket", Key="arquivo.txt")
-#conteudo = obj["Body"].read()
-#print(conteudo)
-
-# Retorna um dict com:
-# Body (stream do arquivo)
-# ContentType
-# ContentLength
-# Metadados
-
-
-# import json
-
-# obj = s3.get_object(Bucket="meu-bucket", Key="dados.json")
-# dados = json.loads(obj["Body"].read())
-
-# print(dados)
-
-
-#Arquivos grandes
-#Streaming (iter_chunks)
+# Filtra apenas registros mais recentes que já existem na tabela
+if max_data_coleta is not None:
+    df = df_preco_competidores[df_preco_competidores["data_coleta"] > max_data_coleta]
+else:
+    df = df_preco_competidores
+# Só insere se houver registros novos
+if not df.empty:
+    df.to_sql(
+        name=bronze_table,
+        con=engine,
+        schema=schema_name,
+        if_exists="append",
+        index=False
+    )
+    print(f"{len(df)} registros inseridos na tabela {schema_name}.{bronze_table}.")
+else:
+    print("Nenhum registro novo para inserir.")
