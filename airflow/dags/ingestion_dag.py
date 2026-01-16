@@ -16,9 +16,8 @@ with DAG(
     dag_id="data_ingestion",
     default_args=default_args,
     start_date=datetime(2024, 1, 1),
-    schedule_interval="@daily",
+    schedule_interval=None,
     catchup=False,
-    tags=["bronze", "minio", "csv", "postgres"],
 ) as dag:
 
     load_bronze_competidores = PythonOperator(
@@ -48,8 +47,4 @@ with DAG(
     op_kwargs={
             "entity": "vendas",
         },
-    
-    
     )
-
-    [load_bronze_competidores, load_bronze_clientes, load_bronze_produtos, load_bronze_vendas]
